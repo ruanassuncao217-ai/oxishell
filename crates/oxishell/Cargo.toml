@@ -1,0 +1,16 @@
+[package]
+name = "oxishell"
+description = "Suíte de ferramentas nativas para Windows escrita em Rust (arquivos, busca, tarefas, disco, limpeza, fotos, ajustes)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+oxi-core = { path = "../oxi-core" }
+eframe = { version = "0.32", default-features = false, features = ["default_fonts", "glow"] }
+egui_extras = { version = "0.32", features = ["image"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp"] }
+
+# Só para poder compilar/verificar em Linux (o alvo real é o Windows).
+[target.'cfg(not(windows))'.dependencies]
+eframe = { version = "0.32", default-features = false, features = ["x11"] }

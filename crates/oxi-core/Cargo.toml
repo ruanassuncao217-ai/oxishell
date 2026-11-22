@@ -1,0 +1,18 @@
+[package]
+name = "oxi-core"
+description = "Lógica portável do OxiShell: busca, uso de disco, limpeza, processos, ajustes e arquivos."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sysinfo = "0.37"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+trash = "5"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
+
+[dev-dependencies]
+tempfile = "3"
