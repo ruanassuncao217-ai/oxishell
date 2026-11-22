@@ -14,6 +14,21 @@ pub struct Entry {
     pub modified: Option<SystemTime>,
 }
 
+/// Oculto? No Windows, usa os atributos oculto/sistema (nomes com ponto são visíveis);
+/// nos demais sistemas, nomes começando com ponto.
+#[cfg(windows)]
+fn is_hidden(_name: &str, meta: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const HIDDEN: u32 = 0x2;
+    const SYSTEM: u32 = 0x4;
+    meta.file_attributes() & (HIDDEN | SYSTEM) != 0
+}
+
+#[cfg(not(windows))]
+fn is_hidden(name: &str, _meta: &fs::Metadata) -> bool {
+    name.starts_with('.')
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SortKey {
     Name,
@@ -28,7 +43,7 @@ pub fn list_dir(dir: &Path, show_hidden: bool, sort: SortKey) -> io::Result<Vec<
         let Ok(item) = item else { continue };
         let Ok(meta) = item.metadata() else { continue };
         let name = item.file_name().to_string_lossy().into_owned();
-        if !show_hidden && name.starts_with('.') {
+        if !show_hidden && is_hidden(&name, &meta) {
             continue;
         }
         out.push(Entry {
