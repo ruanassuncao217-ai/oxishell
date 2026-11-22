@@ -151,15 +151,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn lists_dirs_first_and_hides_dotfiles() {
+    fn lists_dirs_first() {
         let d = tempfile::tempdir().unwrap();
         fs::write(d.path().join("b.txt"), "x").unwrap();
-        fs::write(d.path().join(".hidden"), "x").unwrap();
         fs::create_dir(d.path().join("zdir")).unwrap();
         let v = list_dir(d.path(), false, SortKey::Name).unwrap();
         let names: Vec<_> = v.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(names, ["zdir", "b.txt"]);
-        assert_eq!(list_dir(d.path(), true, SortKey::Name).unwrap().len(), 3);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn hides_dotfiles_unless_asked() {
+        let d = tempfile::tempdir().unwrap();
+        fs::write(d.path().join("b.txt"), "x").unwrap();
+        fs::write(d.path().join(".hidden"), "x").unwrap();
+        assert_eq!(list_dir(d.path(), false, SortKey::Name).unwrap().len(), 1);
+        assert_eq!(list_dir(d.path(), true, SortKey::Name).unwrap().len(), 2);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn hides_files_with_hidden_attribute() {
+        let d = tempfile::tempdir().unwrap();
+        fs::write(d.path().join("visible.txt"), "x").unwrap();
+        let h = d.path().join("secret.txt");
+        fs::write(&h, "x").unwrap();
+        let ok = std::process::Command::new("attrib").arg("+h").arg(&h).status().map(|s| s.success()).unwrap_or(false);
+        assert!(ok, "attrib +h falhou");
+        let names: Vec<_> = list_dir(d.path(), false, SortKey::Name).unwrap().into_iter().map(|e| e.name).collect();
+        assert_eq!(names, ["visible.txt"]);
+        assert_eq!(list_dir(d.path(), true, SortKey::Name).unwrap().len(), 2);
     }
 
     #[test]
