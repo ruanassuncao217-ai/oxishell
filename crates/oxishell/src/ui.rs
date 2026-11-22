@@ -388,7 +388,9 @@ impl TasksTab {
                     ui.label(&p.name);
                     ui.label(format!("{:.1}%", p.cpu));
                     ui.label(human_size(p.memory));
-                    if ui.small_button("Encerrar").clicked() {
+                    if procs::is_protected(p.pid, &p.name) {
+                        ui.weak("protegido");
+                    } else if ui.small_button("Encerrar").clicked() {
                         kill = Some(p.pid);
                     }
                     ui.end_row();
@@ -616,11 +618,16 @@ impl PhotosTab {
 struct TuneTab {
     backup: tune::Backup,
     message: String,
+    locked: bool,
 }
 
 impl TuneTab {
     fn new() -> Self {
-        TuneTab { backup: tune::Backup::default(), message: String::new() }
+        match tune::Backup::load(&tune::default_backup_path()) {
+            Ok(backup) => TuneTab { backup, message: String::new(), locked: false },
+            // Backup ilegível: bloqueia alterações para não perder os valores originais.
+            Err(e) => TuneTab { backup: tune::Backup::default(), message: format!("Erro: {e}"), locked: true },
+        }
     }
 
     #[cfg(windows)]
@@ -637,31 +644,36 @@ impl TuneTab {
                     ui.strong(t.title);
                     ui.weak(t.description);
                 });
-                if applied {
-                    if ui.button("Desfazer").clicked() {
-                        action = Some((t.id, false));
+                ui.add_enabled_ui(!self.locked, |ui| {
+                    if applied {
+                        if ui.button("Desfazer").clicked() {
+                            action = Some((t.id, false));
+                        }
+                    } else if ui.button("Aplicar").clicked() {
+                        action = Some((t.id, true));
                     }
-                } else if ui.button("Aplicar").clicked() {
-                    action = Some((t.id, true));
-                }
+                });
             });
         }
         if let Some((id, apply)) = action {
             let res = if apply { tune::apply(&mut reg, &[id], &mut self.backup, false) } else { tune::undo(&mut reg, &[id], &mut self.backup) };
             self.message = match res {
-                Ok(log) => log.join("; "),
+                Ok(log) => match self.backup.save(&tune::default_backup_path()) {
+                    Ok(()) => log.join("; "),
+                    Err(e) => format!("{} — ATENÇÃO: {e}", log.join("; ")),
+                },
                 Err(e) => format!("Erro: {e}"),
             };
         }
         if !self.message.is_empty() {
             ui.colored_label(egui::Color32::LIGHT_GREEN, &self.message);
         }
-        ui.weak("Dica: para desfazer em outra sessão, use `oxishell tune undo` (usa o mesmo backup).");
+        ui.weak(format!("O backup dos valores originais fica em {} e vale também para `oxishell tune undo`.", tune::default_backup_path().display()));
     }
 
     #[cfg(not(windows))]
     fn ui(&mut self, ui: &mut egui::Ui) {
-        let _ = (&self.backup, &self.message);
+        let _ = (&self.backup, &self.message, self.locked);
         ui.label("Os ajustes do Windows só estão disponíveis no Windows.");
     }
 }

@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Tweak {
@@ -85,6 +86,29 @@ impl Backup {
     pub fn from_json(s: &str) -> Result<Backup, String> {
         serde_json::from_str(s).map_err(|e| format!("backup inválido: {e}"))
     }
+
+    /// Carrega o backup de `path`; arquivo ausente = backup vazio. Arquivo corrompido é erro
+    /// (nunca é ignorado em silêncio, para não perder os valores originais).
+    pub fn load(path: &Path) -> Result<Backup, String> {
+        match std::fs::read_to_string(path) {
+            Ok(s) => Backup::from_json(&s),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Backup::default()),
+            Err(e) => Err(format!("não consegui ler o backup: {e}")),
+        }
+    }
+
+    pub fn save(&self, path: &Path) -> Result<(), String> {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(path, self.to_json()).map_err(|e| format!("não consegui salvar o backup: {e}"))
+    }
+}
+
+/// Local único do backup, compartilhado entre a interface e a linha de comando.
+pub fn default_backup_path() -> PathBuf {
+    let base = std::env::var_os("APPDATA").or_else(|| std::env::var_os("HOME")).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
+    base.join("oxishell").join("tune-backup.json")
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -250,6 +274,19 @@ mod tests {
         let log = apply(&mut reg, &["ad-id"], &mut b, false).unwrap();
         assert!(log[0].contains("já aplicado"));
         assert_eq!(b.previous["ad-id"], Some(1));
+    }
+
+    #[test]
+    fn backup_persists_on_disk_and_corrupt_file_is_an_error() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("sub").join("b.json");
+        assert_eq!(Backup::load(&p).unwrap(), Backup::default());
+        let mut b = Backup::default();
+        b.previous.insert("ad-id".into(), Some(1));
+        b.save(&p).unwrap();
+        assert_eq!(Backup::load(&p).unwrap(), b);
+        std::fs::write(&p, "isto não é json").unwrap();
+        assert!(Backup::load(&p).is_err());
     }
 
     #[test]

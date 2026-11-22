@@ -2,7 +2,7 @@
 //! Operações que alteram algo exigem `--apply`; sem ele, é só simulação.
 
 use oxi_core::{cleaner, diskusage, human_size, search, tune};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::SystemTime;
 
 const HELP: &str = "OxiShell — uso:
@@ -52,21 +52,12 @@ fn clean(dry_run: bool) -> i32 {
     0
 }
 
-fn backup_path() -> PathBuf {
-    let base = std::env::var_os("APPDATA").or_else(|| std::env::var_os("HOME")).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
-    base.join("oxishell").join("tune-backup.json")
-}
-
-fn load_backup() -> tune::Backup {
-    std::fs::read_to_string(backup_path()).ok().and_then(|s| tune::Backup::from_json(&s).ok()).unwrap_or_default()
+fn load_backup() -> Result<tune::Backup, String> {
+    tune::Backup::load(&tune::default_backup_path())
 }
 
 fn save_backup(b: &tune::Backup) -> Result<(), String> {
-    let p = backup_path();
-    if let Some(dir) = p.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    }
-    std::fs::write(p, b.to_json()).map_err(|e| e.to_string())
+    b.save(&tune::default_backup_path())
 }
 
 #[cfg(windows)]
@@ -113,7 +104,13 @@ fn tune_apply(ids: &[&str], dry_run: bool) -> i32 {
     };
     let all: Vec<&str> = tune::TWEAKS.iter().map(|t| t.id).collect();
     let ids: Vec<&str> = if ids == ["all"] { all } else { ids.to_vec() };
-    let mut backup = load_backup();
+    let mut backup = match load_backup() {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("erro: {e}");
+            return 1;
+        }
+    };
     match tune::apply(&mut reg, &ids, &mut backup, dry_run) {
         Ok(log) => {
             log.iter().for_each(|l| println!("{l}"));
@@ -137,7 +134,13 @@ fn tune_undo(ids: &[&str]) -> i32 {
         eprintln!("Os ajustes só estão disponíveis no Windows.");
         return 1;
     };
-    let mut backup = load_backup();
+    let mut backup = match load_backup() {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("erro: {e}");
+            return 1;
+        }
+    };
     match tune::undo(&mut reg, ids, &mut backup) {
         Ok(log) => {
             log.iter().for_each(|l| println!("{l}"));

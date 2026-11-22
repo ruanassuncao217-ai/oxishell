@@ -18,6 +18,18 @@ pub enum ProcSort {
     Pid,
 }
 
+/// Processos que o Windows precisa para funcionar; encerrá-los derruba a sessão ou o sistema.
+const PROTECTED: &[&str] = &[
+    "system", "system idle process", "registry", "memory compression", "smss.exe", "csrss.exe", "wininit.exe",
+    "winlogon.exe", "services.exe", "lsass.exe", "svchost.exe", "dwm.exe", "fontdrvhost.exe", "lsaiso.exe",
+    "sihost.exe", "ctfmon.exe",
+];
+
+/// `true` se o processo é crítico e o OxiShell se recusa a encerrá-lo.
+pub fn is_protected(pid: u32, name: &str) -> bool {
+    pid <= 4 || PROTECTED.contains(&name.to_lowercase().as_str())
+}
+
 pub struct Monitor {
     sys: System,
 }
@@ -73,6 +85,9 @@ impl Monitor {
         }
         match self.sys.process(Pid::from_u32(pid)) {
             Some(p) => {
+                if is_protected(pid, &p.name().to_string_lossy()) {
+                    return Err("processo crítico do sistema: encerrar isso derrubaria o Windows".into());
+                }
                 if p.kill() {
                     Ok(())
                 } else {
@@ -112,6 +127,15 @@ mod tests {
         assert_eq!(v[0].name, "A");
         sort_procs(&mut v, ProcSort::Pid);
         assert_eq!(v[2].pid, 3);
+    }
+
+    #[test]
+    fn critical_processes_are_protected() {
+        assert!(is_protected(4, "System"));
+        assert!(is_protected(900, "CSRSS.EXE"));
+        assert!(is_protected(1234, "svchost.exe"));
+        assert!(is_protected(0, "anything"));
+        assert!(!is_protected(5000, "notepad.exe"));
     }
 
     #[test]

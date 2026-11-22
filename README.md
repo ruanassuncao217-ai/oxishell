@@ -10,11 +10,11 @@ Princípio de design: **nada é destrutivo por padrão.** OxiShell não substitu
 | --- | --- |
 | Arquivos | Navegar, copiar, recortar, colar, renomear, criar pasta. Excluir sempre envia para a **lixeira**. Cópia nunca sobrescreve (usa "nome - copia"). |
 | Busca | Indexa uma pasta em segundo plano e busca por nome com ranking (exato > prefixo > trecho > aproximado). Filtros: `ext:pdf`, `dir:`, `file:`. |
-| Tarefas | CPU, memória e lista de processos com filtro, ordenação e encerrar. Recusa encerrar o próprio OxiShell. |
+| Tarefas | CPU, memória e lista de processos com filtro, ordenação e encerrar. Recusa encerrar o próprio OxiShell e processos críticos do Windows (csrss, lsass, svchost, etc.), marcados como "protegido". |
 | Disco | Varre uma pasta e mostra a árvore de tamanhos com percentuais. Não segue links simbólicos. |
-| Limpeza | Remove só **arquivos antigos** de pastas temporárias, depois de mostrar o que seria removido. Nunca remove pastas. |
+| Limpeza | Remove só **arquivos antigos** de pastas temporárias, depois de mostrar o que seria removido e pedir confirmação. A remoção é **definitiva** (não passa pela lixeira). Nunca remove pastas. |
 | Fotos | Visualizador (jpg, png, gif, bmp, webp, tiff) com ordem natural (foto2 antes de foto10) e setas do teclado. |
-| Ajustes | Poucos ajustes de privacidade **só do usuário atual** (HKCU), cada um com backup do valor original e botão de desfazer. |
+| Ajustes | Poucos ajustes de privacidade **só do usuário atual** (HKCU), cada um com backup do valor original salvo em disco (`%APPDATA%\oxishell\tune-backup.json`), compartilhado entre a interface e a CLI, e botão de desfazer. |
 
 ## Linha de comando
 
@@ -39,7 +39,7 @@ Requer Rust estável. A lógica fica em `crates/oxi-core` (portável, com testes
 
 ## Estado do projeto (leia antes de usar)
 
-- A lógica de `oxi-core` tem 25 testes automatizados que passam em Linux.
+- A lógica de `oxi-core` tem 27 testes automatizados que passam em Linux.
 - O código **específico do Windows** (acesso ao registro nos Ajustes) e a interface gráfica foram escritos com cuidado, mas a verificação em Windows depende do CI (`.github/workflows/ci.yml`, roda em `windows-latest`). Rode o CI no primeiro push e corrija o que aparecer.
 - A busca usa varredura de pastas, não a leitura direta da MFT do NTFS; é mais lenta em discos enormes, em troca de ser simples e segura.
 - Não há barra de tarefas própria nem substituição do shell, de propósito.
